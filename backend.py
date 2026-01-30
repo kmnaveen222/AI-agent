@@ -1,0 +1,205 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+import sqlite3
+import uuid
+
+DB_PATH = "food.db"
+
+app = FastAPI(title="Food Order API")
+
+# ---------- DB Helper ----------
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# ---------- Request Model ----------
+class InvokeRequest(BaseModel):
+    tool: str
+    params: dict
+
+
+# ---------- API ----------
+@app.post("/invoke")
+def invoke(req: InvokeRequest):
+    tool = req.tool
+    params = req.params
+
+    try:
+        if tool == "restaurants.search":
+            return restaurants_search(params)
+
+        if tool == "menus.list":
+            return menus_list(params)
+
+        if tool == "cart.ensure":
+            return cart_ensure(params)
+
+        if tool == "cart.add_item":
+            return cart_add_item(params)
+
+        if tool == "cart.view":
+            return cart_view(params)
+
+        if tool == "cart.clear":
+            return cart_clear(params)
+
+        if tool == "orders.create_mock":
+            return orders_create(params)
+        
+
+
+        if tool == "conversation.create":
+            conversation_id = conversation_create(params["cart_id"])
+            return {"conversation_id": conversation_id}
+
+        if tool == "conversation.save_message":
+            conversation_save(
+                params["conversation_id"],
+                params["role"],
+                params["content"]
+            )
+            return {"status": "saved"}
+
+        if tool == "conversation.load":
+            return {
+                "messages": load_messages(params["conversation_id"])
+            }
+
+        return {"error": {"code": "UNKNOWN_TOOL", "message": tool}}
+
+    except Exception as e:
+        return {"error": {"code": "SERVER_ERROR", "message": str(e)}}
+
+
+# ---------- Tool Implementations ----------
+
+def restaurants_search(p):
+    db = get_db()
+    q = """
+    SELECT * FROM restaurants
+    WHERE is_open = 1
+      AND (:city IS NULL OR city = :city)
+      AND (:area IS NULL OR area = :area)
+      AND (:cuisine IS NULL OR cuisine_tags LIKE '%' || :cuisine || '%')
+    """
+    rows = db.execute(q, p).fetchall()
+    return {"restaurants": [dict(r) for r in rows]}
+
+
+def menus_list(p):
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM menu_items WHERE restaurant_id = ? AND is_available = 1",
+        (p["restaurant_id"],)
+    ).fetchall()
+    return {"menu": [dict(r) for r in rows]}
+
+
+def cart_ensure(p):
+    db = get_db()
+    cid = p["cart_id"]
+    db.execute("INSERT OR IGNORE INTO carts(id) VALUES (?)", (cid,))
+    db.commit()
+    return {"cart_id": cid, "status": "ready"}
+
+
+def cart_add_item(p):
+    db = get_db()
+    item = db.execute(
+        "SELECT price_cents FROM menu_items WHERE id = ?",
+        (p["menu_item_id"],)
+    ).fetchone()
+
+    db.execute("""
+        INSERT INTO cart_items(cart_id, menu_item_id, quantity, unit_price_cents)
+        VALUES (?, ?, ?, ?)
+    """, (p["cart_id"], p["menu_item_id"], p["quantity"], item["price_cents"]))
+
+    db.commit()
+    return {"status": "item_added"}
+
+
+def cart_view(p):
+    db = get_db()
+    rows = db.execute("""
+        SELECT mi.name, ci.quantity, ci.unit_price_cents,
+               ci.quantity * ci.unit_price_cents AS total
+        FROM cart_items ci
+        JOIN menu_items mi ON mi.id = ci.menu_item_id
+        WHERE ci.cart_id = ?
+    """, (p["cart_id"],)).fetchall()
+
+    subtotal = sum(r["total"] for r in rows)
+    return {
+        "items": [dict(r) for r in rows],
+        "subtotal_rupees": subtotal / 100
+    }
+
+
+def cart_clear(p):
+    db = get_db()
+    db.execute("DELETE FROM cart_items WHERE cart_id = ?", (p["cart_id"],))
+    db.commit()
+    return {"status": "cart_cleared"}
+
+
+def orders_create(p):
+    db = get_db()
+    order_id = str(uuid.uuid4())
+
+    subtotal = db.execute("""
+        SELECT SUM(quantity * unit_price_cents) FROM cart_items WHERE cart_id = ?
+    """, (p["cart_id"],)).fetchone()[0] or 0
+
+    delivery = 4000
+    total = subtotal + delivery
+
+    db.execute("""
+        INSERT INTO orders(id, cart_id, status, subtotal_cents, delivery_fee_cents, total_cents)
+        VALUES (?, ?, 'PLACED', ?, ?, ?)
+    """, (order_id, p["cart_id"], subtotal, delivery, total))
+
+    db.commit()
+    return {"order_id": order_id, "total_rupees": total / 100}
+
+
+
+
+# ---------- Conversation Logging ----------
+
+def conversation_create(cart_id: str) -> int:
+    conn = get_db()
+    cursor = conn.execute(
+        "INSERT INTO conversations (cart_id) VALUES (?)",
+        (cart_id,)
+    )
+    conn.commit()
+
+    conversation_id = cursor.lastrowid  # ✅ cleaner & safer
+    conn.close()
+
+    return conversation_id
+
+
+def conversation_save(conversation_id: int, role: str, content: str):
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)",
+        (conversation_id, role, content)
+    )
+    conn.commit()
+    conn.close()
+
+
+def load_messages(conversation_id: int):
+    conn = get_db()
+    cursor = conn.execute(
+        "SELECT role, content FROM messages WHERE conversation_id=? ORDER BY id",
+        (conversation_id,)
+    )
+    rows = cursor.fetchall()  # ✅ correct
+    conn.close()
+
+    return [(row["role"], row["content"]) for row in rows]
