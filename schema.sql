@@ -60,10 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_restaurants_city ON restaurants(city);
 CREATE INDEX IF NOT EXISTS idx_menu_restaurant ON menu_items(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id);
 CREATE INDEX IF NOT EXISTS idx_orders_cart ON orders(cart_id);
-``
 
-
--- ---------- Conversation History ----------
 
 CREATE TABLE IF NOT EXISTS conversations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

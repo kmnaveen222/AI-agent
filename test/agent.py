@@ -71,16 +71,16 @@ def get_current_time(city: str) -> dict:
         return f"Error determining time: {str(e)}"
 
 
-model = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite")
+model = ChatGoogleGenerativeAI(model="gemini-3-flash-preview")
 
 agent = create_agent(
     model=model,
-    tools=[get_weather,get_current_time],
+    # tools=[get_weather,get_current_time],
     system_prompt="You are a helpful assistant",
 )
 
 result = agent.invoke(
-    {"messages": [{"role": "user", "content": "what is the weather in chennai?"},{"role": "user", "content": "Tells the current time in a specified city."}]}
+    {"messages": [{"role": "user", "content": "what is the weather in chennai?"}]}
 )
 
 print(result["messages"])

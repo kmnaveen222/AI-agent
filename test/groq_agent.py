@@ -1,16 +1,13 @@
 # app_create_agent.py
-from pyexpat.errors import messages
 import os, json, uuid, requests
 from typing import Optional
 
 from pydantic import BaseModel, Field
 from langchain_core.tools import StructuredTool
-from langchain_google_genai import ChatGoogleGenerativeAI
+# from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain.agents import create_agent  # LangChain's production agent API
-
-from prompt import SYSTEM_PROMPT
 from dotenv import load_dotenv
-
 load_dotenv()
 
 
@@ -18,7 +15,6 @@ load_dotenv()
 
 API_URL = os.getenv("FOOD_API", "http://127.0.0.1:8765/invoke")
 CART_ID = os.getenv("CART_ID") or str(uuid.uuid4())
-currentobj=[]
 
 
 # ---------------------------
@@ -28,10 +24,8 @@ class FoodAPI:
     def __init__(self, api_url: str):
         self.api_url = api_url
     def invoke(self, tool: str, params: dict):
-        # print(f"Invoking tool: {tool} with params: {params}")
         r = requests.post(self.api_url, json={"tool": tool, "params": params})
         r.raise_for_status()
-        
         return r.json()
 
 client = FoodAPI(API_URL)
@@ -92,6 +86,7 @@ class ConversationLoadArgs(BaseModel):
     conversation_id: int
 
 
+
 # ---------------------------
 # Tool wrappers (each calls your API)
 # ---------------------------
@@ -100,10 +95,7 @@ def restaurants_search_tool(city=None, area=None, cuisine=None, min_rating=None,
         "city": city, "area": area, "cuisine": cuisine,
         "min_rating": min_rating, "price_level": price_level
     }.items() if v is not None}
-    response = _json(client.invoke("restaurants.search", params))
-    currentobj.append(response)
-    # print("Current Object in restaurants_search_tool:", currentobj)
-    return response
+    return _json(client.invoke("restaurants.search", params))
 
 def menus_list_tool(restaurant_id: int) -> str:
     return _json(client.invoke("menus.list", {"restaurant_id": restaurant_id}))
@@ -238,46 +230,191 @@ conversation_load = StructuredTool.from_function(
     description="Load full conversation history",
     args_schema=ConversationLoadArgs
 )
-# List of all tools
+
+
+
+
 
 TOOLS = [
-    restaurants_search, 
+    restaurants_search, menus_list,
     cart_ensure, cart_view, cart_add_item, cart_update_item, cart_remove_item, cart_clear,
     orders_create_mock, orders_status_get, orders_status_advance_mock,conversation_create,conversation_save_message
 ]
 
 
 
+SYSTEM_PROMPT = (
+    "You are a food-ordering assistant.\n\n"
+
+    "=========================\n"
+    "CRITICAL TOOL EXECUTION RULES (MANDATORY)\n"
+    "=========================\n"
+    "- You MUST use tools to get real data.\n"
+    "- NEVER fabricate restaurants, menus, prices, carts, or order statuses.\n"
+    "- If user intent requires data, you MUST call the appropriate tool.\n"
+    "- You can call ONLY ONE tool per response.\n"
+    "- If multiple tool calls are required, perform them STEP-BY-STEP across turns.\n"
+    "- NEVER attempt multiple tool calls in a single response.\n"
+    "- Do NOT respond with plain text if a tool is applicable.\n"
+    "- After a tool call, respond strictly based on the tool output.\n"
+    "- If required information is missing, ask ONE short clarifying question.\n\n"
+
+    "=========================\n"
+    "GENERAL BEHAVIOR RULES\n"
+    "=========================\n"
+    "- Initialize the cart at the first user interaction using cart.ensure.\n"
+    "- Be concise, friendly, and helpful.\n"
+    "- Never assume missing details.\n\n"
+
+    "=========================\n"
+    "RESTAURANT SEARCH RULES\n"
+    "=========================\n"
+    "- If the user says 'show all restaurants', 'list restaurants', or similar:\n"
+    "  → Call restaurants.search with NO filters.\n"
+    "- If the user mentions city, area, cuisine, rating, or price:\n"
+    "  → Pass ONLY those as filters.\n"
+    "- Never invent filters.\n\n"
+
+    "If the user asks for food near a location (example: 'biryani near Guindy'):\n"
+    "1) Call restaurants.search using the mentioned filters.\n"
+    "2) After receiving search results:\n"
+    "   - If ONE restaurant is found:\n"
+    "     → Call menus.list for that restaurant in the NEXT turn.\n"
+    "   - If MULTIPLE restaurants are found:\n"
+    "     → Ask the user which restaurant they want the menu for.\n"
+    "   - Do NOT call menus.list for multiple restaurants automatically.\n\n"
+
+    "=========================\n"
+    "MENU BROWSING RULES\n"
+    "=========================\n"
+    "- When the user explicitly asks to see a menu:\n"
+    "  → Call menus.list using the provided restaurant_id.\n"
+    "- Do not summarize menu items unless asked.\n\n"
+
+    "=========================\n"
+    "CART RULES\n"
+    "=========================\n"
+    "- Ensure the cart exists before any cart operation.\n"
+    "- Use cart.add_item, cart.update_item, or cart.remove_item ONLY when explicitly requested.\n"
+    "- quantity = 0 means remove the item.\n"
+    "- After every cart change, summarize items and subtotal clearly in ₹.\n\n"
+
+    "=========================\n"
+    "CART VIEW SAFETY RULES (CRITICAL)\n"
+    "=========================\n"
+    "- 'View cart', 'show cart', or 'what’s in my cart' is READ-ONLY.\n"
+    "- ONLY call cart.view.\n"
+    "- NEVER modify the cart during cart viewing.\n"
+    "- After showing the cart, ask:\n"
+    "  'Would you like to place the order?'\n\n"
+
+    "=========================\n"
+    "CHECKOUT RULES\n"
+    "=========================\n"
+    "- Place an order ONLY if the user explicitly says 'place order' or 'yes'.\n"
+    "- Use orders.create_mock to place orders.\n"
+    "- After placing an order:\n"
+    "  → Show order ID and current status.\n"
+    "  → Ask if the user wants to track the order.\n\n"
+
+    "=========================\n"
+    "ORDER TRACKING RULES\n"
+    "=========================\n"
+    "- Use orders.status.get to fetch order status.\n"
+    "- Use orders.status.advance_mock ONLY if the user explicitly asks (development only).\n\n"
+
+    "If the user input is unclear, infer intent carefully but NEVER guess data."
+)
+
+
+
 # ---------------------------
 # Model + create_agent (LangChain)
 # ---------------------------
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3-flash-preview", 
+# llm = ChatGoogleGenerativeAI(
+#     model="gemini-3-flash-preview", 
     # model="gemini-2.5-flash-lite", 
     # model="gemini-2.5-pro",
-  
 
-    temperature=0.2, convert_system_message_to_human=True)
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    
+    api_key=os.getenv("GROQ_API_KEY"),
+    temperature=0.2, )
 agent = create_agent(llm, 
                      tools=TOOLS,
                        system_prompt=SYSTEM_PROMPT,
-                    #    max_iterations=2   # 🔥 prevents infinite retries
                        )
 # create_agent builds a graph-based agent you can invoke with a messages list. [1](https://docs.langchain.com/oss/python/langchain/agents)[2](https://reference.langchain.com/python/langchain/agents/)
+from langchain_core.messages import AIMessage
+
+def extract_assistant_text(messages):
+    """
+    Safely extract the last assistant text message.
+    Returns None if no final assistant text exists yet.
+    """
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage):
+            content = msg.content
+
+            if isinstance(content, str):
+                return content.strip()
+
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and "text" in item:
+                        return item["text"].strip()
+
+    return None
 
 
 
 def main():
-    # print(f"CART_ID: {CART_ID}")
+    print(f"CART_ID: {CART_ID}")
     print("Welcome to the Food Ordering Assistant! Type your messages below (Ctrl+C to exit).")
-    # print(f"CART_ID: {CART_ID}")
+    # messages = [("user", "Initialize the empty cart"),]
+    # result = agent.invoke({"messages": messages})
+    # print("Assistant:", result["messages"][-1].content[0]["text"])
 
-    messages = []
+    # try:
+    #     while True:
+    #         q = input("\nYou: ").strip()
+    #         if not q: 
+    #             continue
+    #         messages.append(("user", q))
+    #         result = agent.invoke({"messages": messages})
+    #         # print the last assistant message
+    #         print("Assistant:", result["messages"][-1].content)
+    #         # keep the whole conversation as state
+    #         messages = [(m.type, m.content) for m in result["messages"]]
+
+    # try:
+    #     while True:
+    #         q = input("\nYou: ").strip()
+    #         if not q:
+    #             continue
+
+    #         # 🔥 ONLY last user input
+    #         messages = [("user", q)]
+
+    #         result = agent.invoke({"messages": messages})
+    #         print("Assistant:", result["messages"][-1].content)
+    # except KeyboardInterrupt:
+    #     print("\nGoodbye!")
+
+
+    print(f"CART_ID: {CART_ID}")
+
+
 
     # 2. Create conversation
     conv = json.loads(conversation_create_tool(CART_ID))
+    # conv = json.loads(conversation_create_tool(CART_ID))
     conversation_id = conv["conversation_id"]
+
     print("Conversation ID:", conversation_id)
+
+
     try:
         while True:
         
@@ -296,25 +433,17 @@ def main():
             )["messages"]
             # print("History:", history)
 
-            
-
-            # messages.append(("user", q))
-            # messages = messages[-2:]  # keep last 6 messages
-
-            # result = agent.invoke({"messages": messages})
-
             # 5. Agent invocation
-            result = agent.invoke({"messages": history + currentobj})
-            reply = result["messages"][-1].content[0]["text"]
-
+            result = agent.invoke({"messages": history})
+            reply = extract_assistant_text(result["messages"])
+            #["messages"][-1].content[0]["text"]
 
             # 6. Save assistant message
-            conversation_save_message_tool(conversation_id, "assistant", reply)
-            messages.append(("assistant", reply))
-
-            print("-----------------------------------------------------------------------")
-            print("Assistant:", reply)
-            print("-----------------------------------------------------------------------")
+            if reply:
+                conversation_save_message_tool(conversation_id, "assistant", reply)
+                print("Assistant:", reply)
+            else:
+                print("⏳ Assistant is still processing tools...")
 
     except KeyboardInterrupt:
         print("\nGoodbye!")

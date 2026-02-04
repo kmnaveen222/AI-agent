@@ -1,0 +1,119 @@
+
+sample OUTPUT : 1
+You: i want a biryani near guindy 
+-----------------------------------------------------------------------
+Assistant: OK. I found a restaurant for you:
+
+**Buhari** (Guindy)
+Rating: 4.1 | Price: $$
+Menu:
+- **Chicken Biryani** - $220.00 (Signature Buhari biryani)
+- **Egg Biryani** - $180.00 (Fragrant rice with egg)
+
+Would you like to add anything to your cart?
+-----------------------------------------------------------------------
+
+You: i want to add 4 egg briyani to my cart
+-----------------------------------------------------------------------
+Assistant: OK. I've added 4 Egg Biryani to your cart.
+
+**Your Cart:**
+- **Egg Biryani** (x4) - $720.00
+
+**Subtotal:** $720.00
+
+Would you like to place the order?
+-----------------------------------------------------------------------
+
+You: i want to update my cart add one more chicken biryani also 
+-----------------------------------------------------------------------
+Assistant: OK. I've added 1 Chicken Biryani to your cart.
+
+**Your Cart:**
+- **Egg Biryani** (x4) - $720.00
+- **Chicken Biryani** (x1) - $220.00
+
+**Subtotal:** $940.00
+
+Would you like to place the order?
+-----------------------------------------------------------------------
+You: i want to update my cart decrease the 1 egg biryani 
+-----------------------------------------------------------------------
+Assistant: OK. I've updated your cart.
+
+**Your Cart:**
+- **Egg Biryani** (x3) - $540.00
+- **Chicken Biryani** (x1) - $220.00
+
+**Subtotal:** $760.00
+
+Would you like to place the order?
+-----------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+sample OUTPUT : 2
+
+
+PS C:\LeeonTek\AI-agent> python createagent.py
+Welcome to the Food Ordering Assistant! Type your messages below (Ctrl+C to exit).
+Conversation ID: 1
+
+You: i want a sweets near t.nagar
+-----------------------------------------------------------------------
+Assistant: I couldn't find any sweet shops in T. Nagar. Would you like to try a different area or search for a different type of food?
+-----------------------------------------------------------------------
+
+You: i want a biryani near guindy location
+-----------------------------------------------------------------------
+Assistant: OK. I found a restaurant serving biryani in Guindy:
+
+**Buhari** (Rating: 4.1)
+- Chicken Biryani - 220.00
+- Egg Biryani - 180.00
+
+Would you like to add anything to your cart?
+-----------------------------------------------------------------------
+
+You: i want a sweets near t. nagar 
+-----------------------------------------------------------------------
+Assistant: OK. I found a restaurant serving sweets in T. Nagar:
+
+**A2B (Adyar Ananda Bhavan)** (Rating: 4.3)
+- Masala Dosa - 120.00
+- Filter Coffee - 40.00
+
+Would you like to add anything to your cart?
+-----------------------------------------------------------------------
+
+You: can you plz add 2 masala dosa to my cart
+-----------------------------------------------------------------------
+Assistant: OK. I've added 2 Masala Dosa to your cart.
+
+**Current Cart:**
+- Masala Dosa (x2) - 240.00
+**Subtotal: 240.00**
+
+Would you like to place the order?
+-----------------------------------------------------------------------
+
+You: yes i want to place the order
+-----------------------------------------------------------------------
+Assistant: OK. Your order has been placed!
+
+**Order ID:** e4e2dc70-febe-41e7-95e1-23fc7c865375
+**Total:** 280.00
+
+You can check the status of your order anytime.
+-----------------------------------------------------------------------
+
+You: yes i want to check the status of the order
+-----------------------------------------------------------------------
+Assistant: Your order **e4e2dc70-febe-41e7-95e1-23fc7c865375** has been placed and is currently being processed. I'm unable to fetch a live status update at this moment, but it should be on its way soon!
+-----------------------------------------------------------------------

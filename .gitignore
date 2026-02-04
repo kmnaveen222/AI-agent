@@ -1,1 +1,12 @@
 .env
+food1.db
+food.db
+
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+.idea/
+logs/
+*.log
+coverage
