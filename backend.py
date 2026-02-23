@@ -7,7 +7,7 @@ from pydantic import BaseModel
 import sqlite3
 import uuid
 
-DB_PATH = "food.db"
+DB_PATH = "food1.db"
 
 app = FastAPI(title="Food Order API")
 
@@ -105,6 +105,31 @@ def invoke(req: InvokeRequest):
 #     ).fetchall()
 
 #     return {"restaurants": [dict(r) for r in rows]}
+
+
+
+
+def user_login_or_create(p):
+    db = get_db()
+    email = p["email"]
+
+    user = db.execute(
+        "SELECT * FROM users WHERE email = ?",
+        (email,)
+    ).fetchone()
+
+    if user:
+        return dict(user)
+
+    user_id = str(uuid.uuid4())
+    db.execute(
+        "INSERT INTO users (id, email) VALUES (?, ?)",
+        (user_id, email)
+    )
+    db.commit()
+
+    return {"id": user_id, "email": email}
+
 
 
 

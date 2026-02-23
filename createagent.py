@@ -270,6 +270,7 @@ agent = create_agent(llm,
 def main():
     # print(f"CART_ID: {CART_ID}")
     print("Welcome to the Food Ordering Assistant! Type your messages below (Ctrl+C to exit).")
+    print("Can you please provide your location (city or area) and cuisine type to get started? (ex: 'I'm in downtown and looking for Italian food.')")
     # print(f"CART_ID: {CART_ID}")
 
     messages = []

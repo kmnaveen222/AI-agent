@@ -1,6 +1,7 @@
 .env
 food1.db
 food.db
+*.db
 
 __pycache__/
 *.pyc

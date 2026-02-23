@@ -30,8 +30,10 @@ CREATE TABLE IF NOT EXISTS carts (
 CREATE TABLE IF NOT EXISTS cart_items (
   id              INTEGER PRIMARY KEY,
   cart_id         TEXT NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+  user_id         TEXT,
   menu_item_id    INTEGER NOT NULL REFERENCES menu_items(id) ON DELETE RESTRICT,
   quantity        INTEGER NOT NULL CHECK(quantity > 0),
+  -- ALTER TABLE cart_items ADD COLUMN user_id TEXT;
   -- snapshot price to protect against menu changes
   unit_price_cents INTEGER NOT NULL
 );
@@ -39,6 +41,7 @@ CREATE TABLE IF NOT EXISTS cart_items (
 CREATE TABLE IF NOT EXISTS orders (
   id              TEXT PRIMARY KEY, -- UUID
   cart_id         TEXT NOT NULL REFERENCES carts(id),
+  user_id         TEXT NOT NULL,
   status          TEXT NOT NULL CHECK(status IN ('PLACED','CONFIRMED','PREPARING','OUT_FOR_DELIVERY','DELIVERED','CANCELLED')),
   subtotal_cents  INTEGER NOT NULL,
   delivery_fee_cents INTEGER NOT NULL,
@@ -46,6 +49,7 @@ CREATE TABLE IF NOT EXISTS orders (
   placed_at       TEXT NOT NULL DEFAULT (datetime('now')),
   eta_minutes     INTEGER,          -- mock ETA
   tracking_code   TEXT              -- mock tracking ref
+  -- ALTER TABLE orders ADD COLUMN user_id TEXT;
 );
 
 CREATE TABLE IF NOT EXISTS order_items (
@@ -53,7 +57,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   order_id        TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   menu_item_name  TEXT NOT NULL,          -- snapshot
   unit_price_cents INTEGER NOT NULL,      -- snapshot
-  quantity        INTEGER NOT NULL
+  quantity        INTEGER NOT NULL\
+  
 );
 
 CREATE INDEX IF NOT EXISTS idx_restaurants_city ON restaurants(city);
@@ -75,6 +80,14 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,       -- UUID
+  email TEXT UNIQUE NOT NULL,
+  
+  name TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation
